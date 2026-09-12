@@ -13,6 +13,8 @@ export function ChartViewer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [speed, setSpeed] = useState(2.0);
+  const [musicVolume, setMusicVolume] = useState(1.0);
+  const [seVolume, setSeVolume] = useState(1.0);
   const [audioLoaded, setAudioLoaded] = useState(false);
   const [chartLoaded, setChartLoaded] = useState(false);
   const [csvFiles, setCsvFiles] = useState<{ name: string; text: string }[]>([]);
@@ -22,26 +24,26 @@ export function ChartViewer() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const musicGainNodeRef = useRef<GainNode | null>(null);
+  const seGainNodeRef = useRef<GainNode | null>(null);
+  const musicVolumeRef = useRef(1.0);
+  const seVolumeRef = useRef(1.0);
   const scratchSoundRef = useRef<AudioBuffer | null>(null);
   const criticalSoundRef = useRef<AudioBuffer | null>(null);
-  const holdSoundRef = useRef<AudioBuffer | null>(null);
   const perfectSoundRef = useRef<AudioBuffer | null>(null);
-  const holdEndSoundRef = useRef<AudioBuffer | null>(null);
-  const holdSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const lastHitTimeRef = useRef<number>(-9999);
   const startTimeRef = useRef(0);
   const pauseTimeRef = useRef(0);
   const delaySecondsRef = useRef(0);
-  const seActiveCountRef = useRef({ perfect: 0, critical: 0, scratch: 0, holdEnd: 0 });
+  const seActiveCountRef = useRef({ perfect: 0, critical: 0, scratch: 0 });
   const currentTimeRef = useRef<number>(0);
   const seekRef = useRef<((time: number) => void) | null>(null);
 
   // J. Pre-allocated Sets for noteType lookups (avoid per-frame array allocations)
   const HOLD_BODY_TYPES = useMemo(() => new Set([100, 101, 110, 111]), []);
   const CRITICAL_TYPES = useMemo(() => new Set([20, 81, 101, 83, 111]), []);
-  const SCRATCH_TYPES = useMemo(() => new Set([40, 50, 110]), []);
-  const HOLD_END_TYPES = useMemo(() => new Set([100, 101]), []);
+  const SCRATCH_TYPES = useMemo(() => new Set([40, 50, 82, 110]), []);
 
   const comboTicks = useMemo(() => {
     const ticks: number[] = [];
@@ -324,13 +326,6 @@ export function ChartViewer() {
             audioSourceRef.current.disconnect();
             audioSourceRef.current = null;
           }
-          if (holdSourceRef.current) {
-            try {
-              holdSourceRef.current.stop();
-            } catch {}
-            holdSourceRef.current.disconnect();
-            holdSourceRef.current = null;
-          }
         }
 
         setCurrentTime(now);
@@ -344,7 +339,6 @@ export function ChartViewer() {
           let playCritical = false;
           let playScratch = false;
           let playPerfect = false;
-          let playHoldEnd = false;
 
           // J. Binary search + Set-based lookups for sound triggers
           // Find first note that could trigger (startTick > previousHitTime)
@@ -366,12 +360,10 @@ export function ChartViewer() {
             if (n.noteType === 0 || n.noteType === 900) continue;
 
             let isHit = false;
-            let isEndHit = false;
             if (HOLD_BODY_TYPES.has(n.noteType)) {
               if (n.endTick > 0 && n.endTick !== n.startTick) {
                 if (n.endTick > previousHitTime && n.endTick <= currentHitTime) {
                   isHit = true;
-                  isEndHit = true;
                 }
               }
             } else {
@@ -381,24 +373,24 @@ export function ChartViewer() {
             }
 
             if (isHit) {
-              if (isEndHit && HOLD_END_TYPES.has(n.noteType)) {
-                playHoldEnd = true;
-              } else {
-                if (CRITICAL_TYPES.has(n.noteType)) playCritical = true;
-                else if (SCRATCH_TYPES.has(n.noteType)) playScratch = true;
-                else playPerfect = true;
-              }
+              if (CRITICAL_TYPES.has(n.noteType)) playCritical = true;
+              else if (SCRATCH_TYPES.has(n.noteType)) playScratch = true;
+              else playPerfect = true;
             }
           }
 
           const playSound = (
             buffer: AudioBuffer | null,
-            type: "perfect" | "critical" | "scratch" | "holdEnd",
+            type: "perfect" | "critical" | "scratch",
           ) => {
             if (buffer && audioContextRef.current) {
               const src = audioContextRef.current.createBufferSource();
               src.buffer = buffer;
-              src.connect(audioContextRef.current.destination);
+              if (seGainNodeRef.current) {
+                src.connect(seGainNodeRef.current);
+              } else {
+                src.connect(audioContextRef.current.destination);
+              }
               seActiveCountRef.current[type]++;
               src.onended = () => {
                 seActiveCountRef.current[type]--;
@@ -410,60 +402,11 @@ export function ChartViewer() {
           if (playCritical) playSound(criticalSoundRef.current, "critical");
           if (playScratch) playSound(scratchSoundRef.current, "scratch");
           if (playPerfect) playSound(perfectSoundRef.current, "perfect");
-          if (playHoldEnd) playSound(holdEndSoundRef.current, "holdEnd");
         }
         lastHitTimeRef.current = currentHitTime;
-
-        // J. Hold detection with binary search
-        let isHolding = false;
-        {
-          let hLo = 0,
-            hHi = notes.length;
-          while (hLo < hHi) {
-            const mid = (hLo + hHi) >>> 1;
-            if (notes[mid].startTick < currentHitTime - 120) hLo = mid + 1;
-            else hHi = mid;
-          }
-          for (let ni = hLo; ni < notes.length; ni++) {
-            const n = notes[ni];
-            if (n.startTick > currentHitTime) break;
-            if (HOLD_BODY_TYPES.has(n.noteType)) {
-              if (n.startTick <= currentHitTime && n.endTick >= currentHitTime) {
-                isHolding = true;
-                break;
-              }
-            }
-          }
-        }
-
-        if (isHolding) {
-          if (!holdSourceRef.current && holdSoundRef.current && audioContextRef.current) {
-            const src = audioContextRef.current.createBufferSource();
-            src.buffer = holdSoundRef.current;
-            src.loop = true;
-            src.connect(audioContextRef.current.destination);
-            src.start();
-            holdSourceRef.current = src;
-          }
-        } else {
-          if (holdSourceRef.current) {
-            try {
-              holdSourceRef.current.stop();
-            } catch {}
-            holdSourceRef.current.disconnect();
-            holdSourceRef.current = null;
-          }
-        }
       } else {
         // 再生開始時やシーク直後に、ちょうど現在時刻にあるノート（0.0秒のノートなど）をヒット判定に含めるためのオフセット
         lastHitTimeRef.current = now - delaySecondsRef.current - 0.001;
-        if (holdSourceRef.current) {
-          try {
-            holdSourceRef.current.stop();
-          } catch {}
-          holdSourceRef.current.disconnect();
-          holdSourceRef.current = null;
-        }
       }
 
       if (rendererRef.current) {
@@ -502,9 +445,7 @@ export function ChartViewer() {
             const sPerfect = se.perfect > 0 ? "Playing" : "Stopped";
             const sCritical = se.critical > 0 ? "Playing" : "Stopped";
             const sScratch = se.scratch > 0 ? "Playing" : "Stopped";
-            const sHoldEnd = se.holdEnd > 0 ? "Playing" : "Stopped";
-            const sHold = holdSourceRef.current ? "Playing" : "Stopped";
-            const seDebugText = `\n[SE State] Perfect:${sPerfect} | Critical:${sCritical} | Scratch:${sScratch} | HoldEnd:${sHoldEnd} | Hold:${sHold}`;
+            const seDebugText = `\n[SE State] Perfect:${sPerfect} | Critical:${sCritical} | Scratch:${sScratch}`;
 
             let mainDebugText = "";
             if (showDebugNotesRef.current) {
@@ -584,17 +525,42 @@ export function ChartViewer() {
     if (!audioContextRef.current) {
       const ctx = new AudioContext();
       audioContextRef.current = ctx;
+
+      const musicGain = ctx.createGain();
+      musicGain.gain.value = musicVolumeRef.current;
+      musicGain.connect(ctx.destination);
+      musicGainNodeRef.current = musicGain;
+
+      const seGain = ctx.createGain();
+      seGain.gain.value = seVolumeRef.current;
+      seGain.connect(ctx.destination);
+      seGainNodeRef.current = seGain;
+
       const sounds = initSynthesizedSounds(ctx);
       perfectSoundRef.current = sounds.perfect;
       criticalSoundRef.current = sounds.critical;
       scratchSoundRef.current = sounds.scratch;
-      holdSoundRef.current = sounds.hold;
-      holdEndSoundRef.current = sounds.holdEnd;
     }
     if (audioContextRef.current.state === "suspended") {
       void audioContextRef.current.resume();
     }
     return audioContextRef.current;
+  };
+
+  const handleMusicVolumeChange = (val: number) => {
+    setMusicVolume(val);
+    musicVolumeRef.current = val;
+    if (musicGainNodeRef.current) {
+      musicGainNodeRef.current.gain.value = val;
+    }
+  };
+
+  const handleSeVolumeChange = (val: number) => {
+    setSeVolume(val);
+    seVolumeRef.current = val;
+    if (seGainNodeRef.current) {
+      seGainNodeRef.current.gain.value = val;
+    }
   };
 
   const handleFileDrop = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -607,13 +573,7 @@ export function ChartViewer() {
       audioSourceRef.current.stop();
       audioSourceRef.current.disconnect();
     }
-    if (holdSourceRef.current) {
-      try {
-        holdSourceRef.current.stop();
-      } catch {}
-      holdSourceRef.current.disconnect();
-      holdSourceRef.current = null;
-    }
+
     setIsPlaying(false);
 
     const loadedCsvs: { name: string; text: string }[] = [];
@@ -669,15 +629,12 @@ export function ChartViewer() {
         audioSourceRef.current.stop();
         audioSourceRef.current.disconnect();
       }
-      if (holdSourceRef.current) {
-        try {
-          holdSourceRef.current.stop();
-        } catch {}
-        holdSourceRef.current.disconnect();
-      }
+
       if (audioContextRef.current) {
         void audioContextRef.current.close();
         audioContextRef.current = null;
+        musicGainNodeRef.current = null;
+        seGainNodeRef.current = null;
       }
     };
   }, []);
@@ -691,19 +648,17 @@ export function ChartViewer() {
         audioSourceRef.current.stop();
         audioSourceRef.current.disconnect();
       }
-      if (holdSourceRef.current) {
-        try {
-          holdSourceRef.current.stop();
-        } catch {}
-        holdSourceRef.current.disconnect();
-        holdSourceRef.current = null;
-      }
+
       pauseTimeRef.current = ctx.currentTime - startTimeRef.current;
       setIsPlaying(false);
     } else {
       const source = ctx.createBufferSource();
       source.buffer = audioBufferRef.current;
-      source.connect(ctx.destination);
+      if (musicGainNodeRef.current) {
+        source.connect(musicGainNodeRef.current);
+      } else {
+        source.connect(ctx.destination);
+      }
 
       startTimeRef.current = ctx.currentTime - pauseTimeRef.current;
       source.start(0, pauseTimeRef.current);
@@ -727,16 +682,14 @@ export function ChartViewer() {
         } catch {}
         audioSourceRef.current.disconnect();
       }
-      if (holdSourceRef.current) {
-        try {
-          holdSourceRef.current.stop();
-        } catch {}
-        holdSourceRef.current.disconnect();
-        holdSourceRef.current = null;
-      }
+
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBufferRef.current!;
-      source.connect(audioContextRef.current.destination);
+      if (musicGainNodeRef.current) {
+        source.connect(musicGainNodeRef.current);
+      } else {
+        source.connect(audioContextRef.current.destination);
+      }
       startTimeRef.current = audioContextRef.current.currentTime - newTime;
       source.start(0, newTime);
       audioSourceRef.current = source;
@@ -803,6 +756,10 @@ export function ChartViewer() {
               onSpeedChange={setSpeed}
               onToggleSimLines={setShowSimLines}
               freqCanvasRef={freqCanvasRef}
+              musicVolume={musicVolume}
+              seVolume={seVolume}
+              onMusicVolumeChange={handleMusicVolumeChange}
+              onSeVolumeChange={handleSeVolumeChange}
             />
           </div>
         )}

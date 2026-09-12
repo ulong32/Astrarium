@@ -17,6 +17,10 @@ export interface ChartControlsProps {
   onSpeedChange: (speed: number) => void;
   onToggleSimLines: (show: boolean) => void;
   freqCanvasRef: RefObject<HTMLCanvasElement | null>;
+  musicVolume: number;
+  seVolume: number;
+  onMusicVolumeChange: (volume: number) => void;
+  onSeVolumeChange: (volume: number) => void;
 }
 
 export function ChartControls({
@@ -35,6 +39,10 @@ export function ChartControls({
   onSpeedChange,
   onToggleSimLines,
   freqCanvasRef,
+  musicVolume,
+  seVolume,
+  onMusicVolumeChange,
+  onSeVolumeChange,
 }: ChartControlsProps) {
   const formatTime = (time: number) => {
     const mins = Math.floor(time / 60);
@@ -179,6 +187,40 @@ export function ChartControls({
           onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
           className="w-full cursor-pointer accent-primary"
         />
+      </div>
+
+      <div className="flex flex-col gap-3 mt-2 p-3 rounded-lg border border-white/5 bg-white/5">
+        <div className="flex flex-col gap-1">
+          <div className="flex justify-between items-center text-xs font-semibold text-gray-300 uppercase tracking-wider">
+            <span>Music Sound</span>
+            <span className="font-mono text-white">{Math.round(musicVolume * 100)}%</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={musicVolume}
+            onChange={(e) => onMusicVolumeChange(parseFloat(e.target.value))}
+            className="w-full cursor-pointer accent-primary"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <div className="flex justify-between items-center text-xs font-semibold text-gray-300 uppercase tracking-wider">
+            <span>Effect Sound</span>
+            <span className="font-mono text-white">{Math.round(seVolume * 100)}%</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={seVolume}
+            onChange={(e) => onSeVolumeChange(parseFloat(e.target.value))}
+            className="w-full cursor-pointer accent-primary"
+          />
+        </div>
       </div>
 
       <div className="flex items-center mt-2">

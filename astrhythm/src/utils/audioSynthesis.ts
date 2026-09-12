@@ -7,8 +7,6 @@ export interface SynthesizedSoundSet {
   perfect: AudioBuffer;
   critical: AudioBuffer;
   scratch: AudioBuffer;
-  hold: AudioBuffer;
-  holdEnd: AudioBuffer;
 }
 
 /**
@@ -84,51 +82,6 @@ export function createScratchSound(ctx: AudioContext): AudioBuffer {
 }
 
 /**
- * Creates a smooth, seamless looping buzz/shimmer for hold notes.
- */
-export function createHoldSound(ctx: AudioContext): AudioBuffer {
-  // Use exact cycle length to avoid clicks at loop boundaries
-  const fundamental = 330; // E4
-  const cycles = 33;
-  const duration = cycles / fundamental; // ~0.1s exact integer cycles
-  const sampleRate = ctx.sampleRate;
-  const numSamples = Math.round(sampleRate * duration);
-  const buffer = ctx.createBuffer(1, numSamples, sampleRate);
-  const data = buffer.getChannelData(0);
-
-  for (let i = 0; i < numSamples; i++) {
-    const t = (i / numSamples) * duration;
-    // Soft blend of fundamental and 2nd harmonic
-    const s1 = Math.sin(2 * Math.PI * fundamental * t);
-    const s2 = Math.sin(2 * Math.PI * fundamental * 2 * t) * 0.25;
-    data[i] = (s1 + s2) * 0.25;
-  }
-
-  return buffer;
-}
-
-/**
- * Creates a pleasant release chime for hold ends.
- */
-export function createHoldEndSound(ctx: AudioContext): AudioBuffer {
-  const duration = 0.07;
-  const sampleRate = ctx.sampleRate;
-  const numSamples = Math.floor(sampleRate * duration);
-  const buffer = ctx.createBuffer(1, numSamples, sampleRate);
-  const data = buffer.getChannelData(0);
-
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const progress = i / numSamples;
-    const tone = Math.sin(2 * Math.PI * 1100 * t);
-    const amp = Math.pow(1 - progress, 2.2);
-    data[i] = tone * amp * 0.5;
-  }
-
-  return buffer;
-}
-
-/**
  * Generates and returns a complete set of procedural sound effect buffers.
  */
 export function initSynthesizedSounds(ctx: AudioContext): SynthesizedSoundSet {
@@ -136,7 +89,5 @@ export function initSynthesizedSounds(ctx: AudioContext): SynthesizedSoundSet {
     perfect: createTapSound(ctx),
     critical: createCriticalSound(ctx),
     scratch: createScratchSound(ctx),
-    hold: createHoldSound(ctx),
-    holdEnd: createHoldEndSound(ctx),
   };
 }
