@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #ff528a;
+  --color-secondary: #5ae0fe;
+  --color-tertiary: #9d52ff;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #0b0c10; /* Dark space background */
+  color: white;
+}

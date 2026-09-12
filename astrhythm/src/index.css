@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #7b61ff;
+}
+
+:root {
+  font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0d0f1a 0%, #1a1528 100%);
+}
+
+#root {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+@keyframes comboPop {
+  0% {
+    transform: scale(0.8);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-combo-pop {
+  animation: comboPop 100ms cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Custom Seek Slider with Upward Triangle Thumb (▲) pointing to chart bottom */
+.seek-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.seek-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background-color: #00ff88;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  cursor: pointer;
+  margin-top: 0px;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease;
+  filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.seek-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+  background-color: #33ff99;
+}
+
+.seek-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background-color: #00ff88;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  border: none;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease;
+  filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.seek-slider::-moz-range-thumb:hover {
+  transform: scale(1.25);
+  background-color: #33ff99;
+}
